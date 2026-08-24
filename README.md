@@ -1,5 +1,7 @@
 # Healthcare Appointment & Follow-up Manager
 
+**Live Deployment**: [https://healtcare-appointment.vercel.app/](https://healtcare-appointment.vercel.app/)
+
 A full-stack application for managing healthcare appointments, follow-ups, AI-generated visit summaries, medication reminders, and Google Calendar integration.
 
 ## Architecture
