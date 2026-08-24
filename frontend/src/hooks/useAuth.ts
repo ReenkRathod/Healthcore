@@ -1,0 +1,71 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api";
+
+export interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: "PATIENT" | "DOCTOR" | "ADMIN";
+  doctorProfile?: {
+    id: string;
+    isVerifiedByAdmin: boolean;
+    isAccepting: boolean;
+  };
+}
+
+export const useAuth = () => {
+  const queryClient = useQueryClient();
+
+  const meQuery = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ success: boolean; data: { user: User } }>("/auth/me");
+        return res.data.user;
+      } catch (err) {
+        return null;
+      }
+    },
+    retry: false,
+  });
+
+  const loginMutation = useMutation({
+    mutationFn: (credentials: any) =>
+      api.post<{ success: boolean; data: { user: User } }>("/auth/login", credentials),
+    onSuccess: (res) => {
+      queryClient.setQueryData(["me"], res.data.user);
+    },
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: (userData: any) =>
+      api.post<{ success: boolean; data: { user: User } }>("/auth/register", userData),
+    onSuccess: (res) => {
+      // Registration typically logs you in, but let's check what the backend does.
+      // Usually we might need to log in after, or the backend sends tokens.
+      // Assuming backend sets cookies on register if it acts as login, otherwise we might need to call login.
+      // Actually backend /auth/register does NOT set cookies. Let's just return.
+    },
+  });
+
+  const logoutMutation = useMutation({
+    mutationFn: () => api.post("/auth/logout"),
+    onSuccess: () => {
+      queryClient.setQueryData(["me"], null);
+      queryClient.clear();
+    },
+  });
+
+  return {
+    user: meQuery.data,
+    isLoading: meQuery.isLoading,
+    login: loginMutation.mutateAsync,
+    isLoggingIn: loginMutation.isPending,
+    loginError: loginMutation.error,
+    register: registerMutation.mutateAsync,
+    isRegistering: registerMutation.isPending,
+    registerError: registerMutation.error,
+    logout: logoutMutation.mutateAsync,
+  };
+};
