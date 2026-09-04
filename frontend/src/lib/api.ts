@@ -23,12 +23,11 @@ export const api = {
         ...(data ? { "Content-Type": "application/json" } : {}),
         ...headers,
       },
-      // Important: this tells the browser to include cookies with requests to this backend.
-      credentials: "omit", // The backend is on the same domain in dev via proxy, so we can use 'same-origin' or 'include'. Let's use 'include' just to be safe. Wait, if it's via proxy, it's same origin.
+      // "include" ensures auth cookies are sent with every request.
+      // The Vite proxy forwards /api/* to the backend, so the browser treats
+      // it as same-origin, but "include" is the safest setting to guarantee cookies flow.
+      credentials: "include",
     };
-    
-    // Wait, let's fix credentials: "omit" -> "same-origin" because of proxy.
-    config.credentials = "same-origin";
 
     if (data) {
       config.body = JSON.stringify(data);
@@ -36,7 +35,9 @@ export const api = {
 
     const response = await fetch(url, config);
 
-    if (!response.ok) {
+    const isOk = response.ok || response.status === 304;
+
+    if (!isOk) {
       const errorData = await response.json().catch(() => ({}));
       throw new ApiError(response.status, errorData);
     }

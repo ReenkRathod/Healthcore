@@ -10,8 +10,39 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import * as doctorService from '../services/doctor.service';
 import { calculateDoctorAvailability } from '../services/availability.service';
+import { authenticate, requireRole } from '../middleware/authenticate';
+import { doctorLeaveSchema } from '../validators/doctor.validators';
+import { prisma } from '../db/client';
+import { AppError } from '../utils/AppError';
 
 const router = Router();
+
+// ─── POST /me/leaves — Apply for leave (DOCTOR only) ────────────────────────
+router.post(
+  '/me/leaves',
+  authenticate,
+  requireRole('DOCTOR'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = doctorLeaveSchema.parse(req.body);
+      
+      const doctorProfile = await prisma.doctorProfile.findUnique({
+        where: { userId: req.user!.id }
+      });
+      
+      if (!doctorProfile) throw AppError.notFound('Doctor profile not found');
+      
+      const leave = await doctorService.addDoctorLeave(doctorProfile.id, data);
+
+      res.status(201).json({
+        success: true,
+        data: { leave },
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // ─── GET / — Search / List Doctors ───────────────────────────────────────────
 

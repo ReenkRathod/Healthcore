@@ -25,7 +25,9 @@ export interface DoctorProfile {
   email: string;
   phone: string | null;
   licenseNumber: string;
+  certificateUrl: string | null;
   slotDurationMn: number;
+  consultationFee?: number;
   bio: string | null;
   avatarUrl: string | null;
   isAccepting: boolean;
@@ -97,6 +99,20 @@ export const useVerifyDoctor = () => {
   });
 };
 
+export const useRejectDoctor = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) => {
+      return api.patch<{ success: boolean; data: { doctor: DoctorProfile } }>(`/admin/doctors/${id}/reject`, { reason });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["adminDoctors"] });
+    },
+  });
+};
+
+
 export const usePublicDoctors = (filters?: { search?: string; specialisation?: string }) => {
   return useQuery({
     queryKey: ["publicDoctors", filters],
@@ -133,5 +149,19 @@ export const useDoctorAvailability = (doctorId: string, date: string) => {
       return res.data;
     },
     enabled: Boolean(doctorId) && Boolean(date),
+  });
+};
+
+export const useApplyLeave = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { startDate: string; endDate: string; isFullDay?: boolean; leaveStartTime?: string; leaveEndTime?: string; reason?: string }) => {
+      return api.post<{ success: boolean; data: any }>(`/doctors/me/leaves`, data);
+    },
+    onSuccess: () => {
+      // Invalidate relevant queries like availability
+      queryClient.invalidateQueries({ queryKey: ["doctorAvailability"] });
+    },
   });
 };

@@ -143,7 +143,9 @@ export function getCookieOptions(maxAgeMs: number) {
   return {
     httpOnly: true,
     secure: config.NODE_ENV === 'production',
-    sameSite: 'strict' as const,
+    // Use 'lax' in development to allow cookies to flow through the Vite dev proxy.
+    // Use 'strict' in production for maximum CSRF protection.
+    sameSite: (config.NODE_ENV === 'production' ? 'strict' : 'lax') as 'strict' | 'lax',
     maxAge: maxAgeMs,
     path: '/',
   };

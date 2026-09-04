@@ -128,7 +128,27 @@ router.patch(
   },
 );
 
-// ─── PATCH /:id/status — Activate / Deactivate Doctor ──────────────────────
+// ─── PATCH /:id/reject — Reject Doctor Application ──────────────────────────
+
+router.patch(
+  '/:id/reject',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { reason } = req.body as { reason?: string };
+      const doctor = await doctorService.rejectDoctor(req.params['id']!, reason);
+
+      logger.info({ doctorId: doctor.id, adminId: req.user!.id }, 'Admin rejected doctor application');
+
+      res.status(200).json({
+        success: true,
+        data: { doctor },
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 
 router.patch(
   '/:id/status',

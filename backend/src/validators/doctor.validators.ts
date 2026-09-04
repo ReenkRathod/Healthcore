@@ -98,6 +98,8 @@ export const createDoctorSchema = z.object({
     )
     .default(30),
 
+  consultationFee: z.number().min(0, 'Consultation fee must be non-negative').optional().default(50.0),
+
   bio: z.string().trim().max(2000, 'Bio must be 2000 characters or fewer').optional().nullable(),
 
   avatarUrl: z.string().trim().url('Invalid avatar URL').optional().nullable(),
@@ -123,6 +125,7 @@ export const updateDoctorSchema = z.object({
       },
     )
     .optional(),
+  consultationFee: z.number().min(0).optional(),
   bio: z.string().trim().max(2000).optional().nullable(),
   avatarUrl: z.string().trim().url().optional().nullable(),
   isAccepting: z.boolean().optional(),

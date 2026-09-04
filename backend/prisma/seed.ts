@@ -71,6 +71,7 @@ async function main() {
         create: {
           licenseNumber: 'DOC-TEST-12345',
           slotDurationMn: 30,
+          consultationFee: 75.0,
           isAccepting: true,
           isVerifiedByAdmin: true,
           specialisations: {

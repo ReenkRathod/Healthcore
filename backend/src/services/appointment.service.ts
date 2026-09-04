@@ -371,6 +371,20 @@ export async function bookAppointment(
         },
       });
 
+      // 7. Create in-app notification for the doctor
+      await tx.notification.create({
+        data: {
+          recipientId: doctor.userId,
+          senderId: patientUserId,
+          appointmentId: createdAppt.id,
+          type: 'APPOINTMENT_CONFIRMED',
+          channel: 'IN_APP',
+          subject: 'New Appointment Confirmed',
+          body: `New appointment booked by ${createdAppt.patient.user.firstName} ${createdAppt.patient.user.lastName} for ${slotStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} at ${slotStart.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.`,
+          status: 'PENDING',
+        },
+      });
+
       return createdAppt;
     });
 
@@ -506,6 +520,20 @@ export async function cancelAppointment(
       doctor: { include: { user: true } },
     },
   });
+
+  if (role === Role.DOCTOR && cancellationReason) {
+    await prisma.notification.create({
+      data: {
+        recipientId: updated.patient.userId,
+        senderId: userId,
+        appointmentId: updated.id,
+        type: 'APPOINTMENT_CANCELLED',
+        channel: 'IN_APP',
+        body: `Your appointment with Dr. ${updated.doctor.user.lastName} was rejected. Reason: ${cancellationReason}`,
+        status: 'PENDING',
+      }
+    });
+  }
 
   return updated;
 }

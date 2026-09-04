@@ -78,3 +78,17 @@ export async function authenticate(
     next(AppError.unauthorized('Authentication required'));
   }
 }
+
+export function requireRole(...allowedRoles: string[]) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      next(AppError.unauthorized('Authentication required'));
+      return;
+    }
+    if (!allowedRoles.includes(req.user.role)) {
+      next(AppError.forbidden('Insufficient permissions'));
+      return;
+    }
+    next();
+  };
+}

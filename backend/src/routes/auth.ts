@@ -34,7 +34,7 @@ import type { JwtPayload } from '../services/auth.service';
 import { registerSchema, loginSchema } from '../validators/auth.validators';
 import { authenticate } from '../middleware/authenticate';
 import { AppError } from '../utils/AppError';
-import { config } from '../config';
+import { config, isDev } from '../config';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -56,7 +56,7 @@ const getGoogleClient = () => {
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,                   // 5 attempts per window
+  max: isDev ? Infinity : 5, // unlimited in dev, 5 attempts per window in production
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -71,7 +71,7 @@ const loginLimiter = rateLimit({
 
 const registerLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10,                  // 10 registrations per window
+  max: isDev ? Infinity : 10, // unlimited in dev, 10 registrations per window in production
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -97,22 +97,41 @@ router.post(
       // Hash password — never store plaintext
       const passwordHash = await hashPassword(data.password);
 
-      // Create user — force PATIENT role regardless of anything in the request
-      const user = await prisma.user.create({
-        data: {
-          email: data.email,
-          passwordHash,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phone: data.phone ?? null,
-          role: 'PATIENT', // FORCED — cannot be overridden by client
-          patientProfile: {
-            create: {}, // Create empty patient profile
+      let user;
+      if (data.role === 'DOCTOR') {
+        user = await prisma.user.create({
+          data: {
+            email: data.email,
+            passwordHash,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            phone: data.phone ?? null,
+            role: 'DOCTOR',
+            doctorProfile: {
+              create: {
+                licenseNumber: data.licenseNumber!,
+                certificateUrl: data.certificateUrl!,
+              },
+            },
           },
-        },
-      });
-
-      logger.info({ userId: user.id }, 'New patient registered');
+        });
+        logger.info({ userId: user.id }, 'New doctor registered');
+      } else {
+        user = await prisma.user.create({
+          data: {
+            email: data.email,
+            passwordHash,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            phone: data.phone ?? null,
+            role: 'PATIENT',
+            patientProfile: {
+              create: {},
+            },
+          },
+        });
+        logger.info({ userId: user.id }, 'New patient registered');
+      }
 
       res.status(201).json({
         success: true,
@@ -155,6 +174,19 @@ router.post(
       // Check if account is deactivated
       if (!user.isActive) {
         throw AppError.unauthorized('Invalid email or password');
+      }
+
+      // Block unverified doctors — they must wait for admin approval
+      if (user.role === 'DOCTOR') {
+        const doctorProfile = await prisma.doctorProfile.findUnique({
+          where: { userId: user.id },
+          select: { isVerifiedByAdmin: true },
+        });
+        if (doctorProfile && !doctorProfile.isVerifiedByAdmin) {
+          throw AppError.forbidden(
+            'Your account is pending admin verification. You will be notified once it is approved.',
+          );
+        }
       }
 
       // Check if account has no password (e.g., OAuth only)
@@ -206,11 +238,11 @@ router.post(
   '/logout',
   authenticate,
   (req: Request, res: Response): void => {
-    // Clear auth cookies with matching options (path, httpOnly, etc.)
+    // Clear auth cookies — options must match how they were set (path, httpOnly, sameSite, secure)
     const clearOptions = {
       httpOnly: true,
       secure: config.NODE_ENV === 'production',
-      sameSite: 'strict' as const,
+      sameSite: (config.NODE_ENV === 'production' ? 'strict' : 'lax') as 'strict' | 'lax',
       path: '/',
     };
 

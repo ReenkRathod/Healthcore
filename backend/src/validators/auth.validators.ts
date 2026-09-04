@@ -55,6 +55,18 @@ export const registerSchema = z.object({
     .max(20, 'Phone number must be 20 characters or fewer')
     .optional()
     .nullable(),
+  role: z.enum(['PATIENT', 'DOCTOR']).optional().default('PATIENT'),
+  licenseNumber: z.string().optional(),
+  certificateUrl: z.string().optional()
+}).superRefine((data, ctx) => {
+  if (data.role === 'DOCTOR') {
+    if (!data.licenseNumber) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'License number is required for doctors', path: ['licenseNumber'] });
+    }
+    if (!data.certificateUrl) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Certificate URL is required for doctors', path: ['certificateUrl'] });
+    }
+  }
 });
 
 /** Login request body */

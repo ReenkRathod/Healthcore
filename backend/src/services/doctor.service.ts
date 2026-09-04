@@ -31,7 +31,9 @@ export function formatDoctorProfile(doctor: any) {
     email: user?.email,
     phone: user?.phone,
     licenseNumber: profile.licenseNumber,
+    certificateUrl: profile.certificateUrl ?? null,
     slotDurationMn: profile.slotDurationMn,
+    consultationFee: profile.consultationFee ?? 50.0,
     bio: profile.bio,
     avatarUrl: profile.avatarUrl,
     isAccepting: profile.isAccepting,
@@ -252,7 +254,38 @@ export async function verifyDoctor(doctorProfileId: string) {
   return formatDoctorProfile(updated);
 }
 
-// ─── 5. Specialisations ─────────────────────────────────────────────────────
+export async function rejectDoctor(doctorProfileId: string, _reason?: string) {
+  const doctor = await prisma.doctorProfile.findUnique({
+    where: { id: doctorProfileId },
+    include: { user: true },
+  });
+
+  if (!doctor) {
+    throw AppError.notFound('Doctor profile not found');
+  }
+
+  // Deactivate user account so they cannot log in
+  const updated = await prisma.doctorProfile.update({
+    where: { id: doctorProfileId },
+    data: {
+      isVerifiedByAdmin: false,
+      isAccepting: false,
+      user: {
+        update: {
+          isActive: false,
+        },
+      },
+    },
+    include: {
+      user: true,
+      specialisations: true,
+    },
+  });
+
+  return formatDoctorProfile(updated);
+}
+
+
 
 export async function addSpecialisation(
   doctorProfileId: string,

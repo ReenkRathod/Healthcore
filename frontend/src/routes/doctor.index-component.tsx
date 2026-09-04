@@ -1,7 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useAppointments } from "../hooks/useAppointments";
 import { useAuth } from "../hooks/useAuth";
+import { NotificationBell } from "../components/NotificationBell";
+import { SectionSkeleton } from "../components/ui/LoadingSpinner";
 import {
   formatAppointmentTime,
   formatStatusLabel,
@@ -14,38 +16,42 @@ import {
   getTodayRange,
 } from "../lib/appointment-utils";
 
-export const Route = createFileRoute("/provider/")({
-  head: () => ({
-    meta: [
-      { title: "Doctor Dashboard | HealthCore Professional" },
-      {
-        name: "description",
-        content:
-          "Provider dashboard with today's schedule, pending notes, and quick clinical actions.",
-      },
-      { property: "og:title", content: "Doctor Dashboard | HealthCore Professional" },
-      {
-        property: "og:description",
-        content:
-          "Provider dashboard with today's schedule, pending notes, and quick clinical actions.",
-      },
-    ],
-  }),
-  component: ProviderDashboard,
-});
+// ─── Lazy sub-components ─────────────────────────────────────────────────────
+const DoctorScheduleTable = lazy(() => import("../components/DoctorScheduleTable"));
+const LeaveManager        = lazy(() => import("../components/LeaveManager"));
 
-function ProviderDashboard() {
+export default function ProviderDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const todayRange = useMemo(() => getTodayRange(), []);
+
+  // Today's appointments for the schedule table
   const { data: appointments = [], isLoading, error } = useAppointments(todayRange);
 
-  const nextAppointment = useMemo(() => getNextUpcomingAppointment(appointments), [appointments]);
+  // All upcoming appointments (no date filter) so newly booked future appts are visible
+  const { data: allAppointments = [], isLoading: allLoading } = useAppointments();
+  const upcomingAppointments = useMemo(
+    () =>
+      allAppointments
+        .filter(
+          (a) =>
+            (a.status === "PENDING_CONFIRMATION" || a.status === "CONFIRMED") &&
+            new Date(a.slotStart).getTime() > Date.now(),
+        )
+        .sort((a, b) => new Date(a.slotStart).getTime() - new Date(b.slotStart).getTime()),
+    [allAppointments],
+  );
+
+  const nextAppointment = useMemo(() => getNextUpcomingAppointment(allAppointments), [allAppointments]);
   const pendingActionCount = useMemo(
     () => appointments.filter((appt) => appt.status === "PENDING_CONFIRMATION" || appt.status === "CONFIRMED").length,
     [appointments],
   );
-  const firstAppointmentId = appointments[0]?.id;
+
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+
+  const firstAppointmentId = appointments[0]?.id ?? upcomingAppointments[0]?.id;
+  const userInitials = user ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase() : "DR";
 
   const handleLogout = async () => {
     await logout();
@@ -60,7 +66,7 @@ function ProviderDashboard() {
           <button className="lg:hidden text-on-surface-variant hover:bg-surface-container-low p-sm rounded-full transition-colors">
             <span className="material-symbols-outlined">menu</span>
           </button>
-          <h1 className="text-headline-md font-headline-md font-bold text-primary hidden md:block">HealthCore</h1>
+          <Link to="/doctor" className="text-headline-md font-headline-md font-bold text-primary hidden md:block hover:opacity-80 transition-opacity">HealthCore</Link>
         </div>
         <div className="flex items-center gap-lg flex-1 justify-end">
           <div className="hidden md:flex items-center bg-surface-container-low rounded-full px-4 py-2 flex-1 max-w-md ml-lg">
@@ -72,35 +78,31 @@ function ProviderDashboard() {
             />
           </div>
           <div className="flex items-center gap-md">
-            <button className="text-on-surface-variant hover:bg-surface-container-low p-sm rounded-full transition-colors relative" title="notifications">
-              <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
-            </button>
+            <NotificationBell />
             <button className="text-on-surface-variant hover:bg-surface-container-low p-sm rounded-full transition-colors" title="help">
               <span className="material-symbols-outlined">help</span>
             </button>
-            <div className="h-8 w-8 rounded-full bg-primary-container border border-outline-variant overflow-hidden cursor-pointer hover:opacity-80 transition-opacity">
-              <img
-                alt="User profile"
-                className="w-full h-full object-cover"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDckjfOD3bkBOp13SPLNnMKpMNsKRSqnGZW6Cr8iGDFNyG8nwVpEpBwxkQV6bzM5atf-7ZFiWclLkKk_vOebNx7NeyKXCVmnCJ3A5jBT_9Iiz6JpHmVmjaekRbdTn31D_XnaekwDdF46qxr0njQZDoa1lwWtlVQoZmEmCNTDSJNulUOpNpvQvdxC1_r7DSkS0TMw9GBbaQvzNIrV9VD-xG2PX0bmrDQ0902wuv70xmlKD14C6G-FPU9bw"
-              />
+            <div className="h-8 w-8 rounded-full bg-primary-container border border-outline-variant flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity text-on-primary-container font-bold text-label-sm">
+              {userInitials}
             </div>
           </div>
         </div>
       </header>
+
       {/* SideNavBar & Main Content Wrapper */}
       <div className="flex">
         {/* SideNavBar */}
         <nav className="hidden lg:flex flex-col fixed left-0 top-16 h-[calc(100vh-64px)] w-64 p-md z-40 bg-surface border-r border-outline-variant overflow-y-auto">
           <div className="mb-xl px-sm">
-            <h2 className="text-label-md font-label-md text-on-surface-variant uppercase tracking-wider mb-1">HealthCore Professional</h2>
+            <Link to="/doctor" className="block hover:opacity-80 transition-opacity">
+              <h2 className="text-label-md font-label-md text-on-surface-variant uppercase tracking-wider mb-1">HealthCore Professional</h2>
+            </Link>
             <p className="text-body-sm font-body-sm text-secondary">Provider Portal</p>
           </div>
           <div className="flex-1 space-y-sm">
             <Link
               className="flex items-center gap-md px-4 py-3 bg-primary-container text-on-primary-container font-bold rounded-lg transition-colors"
-              to="/provider"
+              to="/doctor"
             >
               <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>dashboard</span>
               <span className="text-label-md font-label-md">Dashboard</span>
@@ -108,7 +110,7 @@ function ProviderDashboard() {
             {firstAppointmentId ? (
               <Link
                 className="flex items-center gap-md px-4 py-3 text-secondary font-medium hover:bg-secondary-container hover:text-on-secondary-container rounded-lg transition-all duration-200"
-                to="/provider/appointments/$appointmentId"
+                to="/doctor/appointments/$appointmentId"
                 params={{ appointmentId: firstAppointmentId }}
               >
                 <span className="material-symbols-outlined">event</span>
@@ -152,6 +154,7 @@ function ProviderDashboard() {
             </button>
           </div>
         </nav>
+
         {/* Main Content Canvas */}
         <main className="flex-1 w-full lg:pl-64 pt-gutter p-gutter max-w-[1440px] mx-auto space-y-xl pb-xl">
           {/* Header Section */}
@@ -164,6 +167,7 @@ function ProviderDashboard() {
               <p className="text-label-md font-label-md text-secondary uppercase tracking-widest">{formatTodayHeading()}</p>
             </div>
           </section>
+
           {/* Stats/Bento Cards Level 1 */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
             <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col justify-between min-h-[140px]">
@@ -193,7 +197,9 @@ function ProviderDashboard() {
                 <span className="material-symbols-outlined">schedule</span>
               </div>
               <div className="mt-4 relative z-10">
-                {nextAppointment ? (
+                {allLoading ? (
+                  <span className="text-body-md font-body-md opacity-75">Loading...</span>
+                ) : nextAppointment ? (
                   <>
                     <span className="text-headline-md font-headline-md block mb-1">
                       {getPatientDisplayName(
@@ -203,122 +209,30 @@ function ProviderDashboard() {
                     </span>
                     <span className="text-body-md font-body-md font-medium opacity-90 bg-on-primary-container/10 px-2 py-1 rounded inline-flex items-center gap-1">
                       <span className="material-symbols-outlined text-[16px]">alarm</span>
+                      {new Date(nextAppointment.slotStart).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      {" · "}
                       {formatAppointmentTime(nextAppointment.slotStart)}
                     </span>
                   </>
                 ) : (
-                  <span className="text-body-md font-body-md opacity-90">No upcoming appointments today</span>
+                  <span className="text-body-md font-body-md opacity-90">No upcoming appointments</span>
                 )}
               </div>
             </div>
           </section>
+
           {/* Main Layout Grid */}
           <section className="grid grid-cols-1 xl:grid-cols-3 gap-gutter">
-            {/* Today's Schedule */}
-            <div className="xl:col-span-2 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden flex flex-col">
-              <div className="px-lg py-md border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
-                <h3 className="text-headline-md font-headline-md text-on-surface">Today's Schedule</h3>
-                <button className="text-primary hover:text-on-primary-fixed-variant text-label-md font-label-md flex items-center gap-1 transition-colors">
-                  View Calendar <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-surface-bright border-b border-outline-variant">
-                      <th className="px-lg py-3 text-label-md font-label-md text-secondary uppercase">Time</th>
-                      <th className="px-lg py-3 text-label-md font-label-md text-secondary uppercase">Patient</th>
-                      <th className="px-lg py-3 text-label-md font-label-md text-secondary uppercase">Type</th>
-                      <th className="px-lg py-3 text-label-md font-label-md text-secondary uppercase text-right">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant">
-                    {isLoading && (
-                      <tr>
-                        <td colSpan={4} className="px-lg py-8 text-center text-body-md text-on-surface-variant">
-                          Loading today's schedule...
-                        </td>
-                      </tr>
-                    )}
-                    {error && (
-                      <tr>
-                        <td colSpan={4} className="px-lg py-8 text-center text-body-md text-error">
-                          Unable to load appointments. Please sign in as a provider.
-                        </td>
-                      </tr>
-                    )}
-                    {!isLoading && !error && appointments.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-lg py-8 text-center text-body-md text-on-surface-variant">
-                          No appointments scheduled for today.
-                        </td>
-                      </tr>
-                    )}
-                    {!isLoading &&
-                      !error &&
-                      appointments.map((appointment) => {
-                        const patient = appointment.patient.user;
-                        const isNext = nextAppointment?.id === appointment.id;
-                        const initials = getPatientInitials(patient.firstName, patient.lastName);
+            {/* Today's Schedule Table — lazy */}
+            <Suspense fallback={<SectionSkeleton rows={5} label="Loading schedule…" />}>
+              <DoctorScheduleTable
+                appointments={appointments}
+                nextAppointmentId={nextAppointment?.id}
+                isLoading={isLoading}
+                error={error}
+              />
+            </Suspense>
 
-                        return (
-                          <tr
-                            key={appointment.id}
-                            onClick={() =>
-                              navigate({
-                                to: "/provider/appointments/$appointmentId",
-                                params: { appointmentId: appointment.id },
-                              })
-                            }
-                            className={`transition-colors group cursor-pointer ${
-                              isNext
-                                ? "bg-primary-fixed/30 hover:bg-primary-fixed/50"
-                                : "hover:bg-surface-container-low"
-                            }`}
-                          >
-                            <td
-                              className={`px-lg py-4 text-body-md font-body-md whitespace-nowrap ${
-                                isNext ? "text-on-primary-fixed font-semibold" : "text-on-surface"
-                              }`}
-                            >
-                              {formatAppointmentTime(appointment.slotStart)}
-                            </td>
-                            <td className="px-lg py-4">
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className={`w-8 h-8 rounded-full flex items-center justify-center font-label-md ${
-                                    isNext
-                                      ? "bg-primary-container text-on-primary-container"
-                                      : "bg-secondary-container text-on-secondary-container"
-                                  }`}
-                                >
-                                  {initials}
-                                </div>
-                                <div>
-                                  <p className="text-body-md font-body-md font-semibold text-on-surface">
-                                    {getPatientDisplayName(patient.firstName, patient.lastName)}
-                                  </p>
-                                  <p className="text-body-sm font-body-sm text-secondary">ID: {appointment.patient.id.slice(0, 8).toUpperCase()}</p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-lg py-4 text-body-md font-body-md text-on-surface-variant">
-                              {appointment.reasonForVisit || "General Consultation"}
-                            </td>
-                            <td className="px-lg py-4 text-right">
-                              <span
-                                className={`inline-flex items-center px-2 py-1 rounded text-label-md font-label-md ${getStatusBadgeClasses(appointment.status)}`}
-                              >
-                                {formatStatusLabel(appointment.status)}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
             {/* Quick Links & Actions */}
             <div className="xl:col-span-1 space-y-gutter">
               <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg">
@@ -338,6 +252,14 @@ function ProviderDashboard() {
                     </div>
                     <span className="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-[20px]">chevron_right</span>
                   </button>
+                  <button onClick={() => setShowLeaveModal(true)} className="w-full flex items-center justify-between p-4 rounded-lg bg-surface-bright border border-outline-variant hover:border-primary hover:bg-surface-container-low transition-all group">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-primary">event_busy</span>
+                      <span className="text-body-md font-body-md font-medium text-on-surface group-hover:text-primary transition-colors">Apply for Leave</span>
+                    </div>
+                    <span className="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-[20px]">chevron_right</span>
+                  </button>
+
                   <button className="w-full flex items-center justify-between p-4 rounded-lg bg-surface-bright border border-outline-variant hover:border-primary hover:bg-surface-container-low transition-all group relative">
                     <div className="flex items-center gap-3">
                       <span className="material-symbols-outlined text-primary">note_add</span>
@@ -354,8 +276,95 @@ function ProviderDashboard() {
               </div>
             </div>
           </section>
+
+          {/* Upcoming Appointments Table */}
+          <section className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden flex flex-col">
+            <div className="px-lg py-md border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
+              <h3 className="text-headline-md font-headline-md text-on-surface">Upcoming Appointments</h3>
+              <span className="text-label-md font-label-md text-secondary">{upcomingAppointments.length} scheduled</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-surface-bright border-b border-outline-variant">
+                    <th className="px-lg py-3 text-label-md font-label-md text-secondary uppercase">Date</th>
+                    <th className="px-lg py-3 text-label-md font-label-md text-secondary uppercase">Time</th>
+                    <th className="px-lg py-3 text-label-md font-label-md text-secondary uppercase">Patient</th>
+                    <th className="px-lg py-3 text-label-md font-label-md text-secondary uppercase">Reason</th>
+                    <th className="px-lg py-3 text-label-md font-label-md text-secondary uppercase text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant">
+                  {allLoading && (
+                    <tr>
+                      <td colSpan={5} className="px-lg py-8 text-center text-body-md text-on-surface-variant">Loading upcoming appointments...</td>
+                    </tr>
+                  )}
+                  {!allLoading && upcomingAppointments.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-lg py-8 text-center text-body-md text-on-surface-variant">No upcoming appointments scheduled.</td>
+                    </tr>
+                  )}
+                  {!allLoading && upcomingAppointments.map((appointment) => {
+                    const patient = appointment.patient.user;
+                    const initials = getPatientInitials(patient.firstName, patient.lastName);
+                    return (
+                      <tr
+                        key={appointment.id}
+                        onClick={() => navigate({ to: "/doctor/appointments/$appointmentId", params: { appointmentId: appointment.id } })}
+                        className="transition-colors group cursor-pointer hover:bg-surface-container-low"
+                      >
+                        <td className="px-lg py-4 text-body-md font-body-md text-on-surface whitespace-nowrap">
+                          {new Date(appointment.slotStart).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                        </td>
+                        <td className="px-lg py-4 text-body-md font-body-md text-on-surface whitespace-nowrap">
+                          {formatAppointmentTime(appointment.slotStart)}
+                        </td>
+                        <td className="px-lg py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-label-md">
+                              {initials}
+                            </div>
+                            <p className="text-body-md font-body-md font-semibold text-on-surface">
+                              {getPatientDisplayName(patient.firstName, patient.lastName)}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-lg py-4 text-body-md font-body-md text-on-surface-variant">
+                          {appointment.reasonForVisit || "General Consultation"}
+                        </td>
+                        <td className="px-lg py-4 text-right">
+                          <span className={`inline-flex items-center px-2 py-1 rounded text-label-md font-label-md ${getStatusBadgeClasses(appointment.status)}`}>
+                            {formatStatusLabel(appointment.status)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </main>
       </div>
+
+      {/* Leave Manager Modal — lazy */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-md">
+          <div className="w-full max-w-lg relative">
+            <button
+              onClick={() => setShowLeaveModal(false)}
+              className="absolute top-3 right-3 text-on-surface-variant hover:text-on-surface z-10"
+              title="Close"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+            <Suspense fallback={<SectionSkeleton rows={4} label="Loading leave manager…" />}>
+              <LeaveManager />
+            </Suspense>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

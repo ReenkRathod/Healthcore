@@ -115,11 +115,17 @@ function ProfilePage() {
               <div className="px-md py-sm bg-surface-container-low border border-outline-variant rounded-lg text-on-surface opacity-70">
                 {user.email}
               </div>
-            </div>
-            <div>
-              <label className="text-label-md font-label-md text-on-surface mb-xs block">Phone Number</label>
-              <div className="px-md py-sm bg-surface-container-low border border-outline-variant rounded-lg text-on-surface">
-                {user.phone || <span className="text-outline italic">Not provided</span>}
+              <div className="flex flex-col gap-xs mt-lg">
+                <label className="font-label-md text-label-md text-on-surface" htmlFor="phone">
+                  Phone Number
+                </label>
+                <input
+                  className="w-full px-md h-[44px] bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors disabled:opacity-70 disabled:bg-surface-container-low"
+                  id="phone"
+                  disabled
+                  type="text"
+                  value={user?.role === 'DOCTOR' ? (user as any).doctorProfile?.phone || "" : (user as any).patientProfile?.phone || ""}
+                />
               </div>
             </div>
           </div>
