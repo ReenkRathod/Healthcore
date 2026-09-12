@@ -32,8 +32,11 @@ export const useAuth = () => {
 
   const loginMutation = useMutation({
     mutationFn: (credentials: any) =>
-      api.post<{ success: boolean; data: { user: User } }>("/auth/login", credentials),
+      api.post<{ success: boolean; data: { user: User; accessToken?: string } }>("/auth/login", credentials),
     onSuccess: (res) => {
+      if (res.data.accessToken) {
+        localStorage.setItem("access_token", res.data.accessToken);
+      }
       queryClient.setQueryData(["me"], res.data.user);
     },
   });
@@ -41,17 +44,13 @@ export const useAuth = () => {
   const registerMutation = useMutation({
     mutationFn: (userData: any) =>
       api.post<{ success: boolean; data: { user: User } }>("/auth/register", userData),
-    onSuccess: (res) => {
-      // Registration typically logs you in, but let's check what the backend does.
-      // Usually we might need to log in after, or the backend sends tokens.
-      // Assuming backend sets cookies on register if it acts as login, otherwise we might need to call login.
-      // Actually backend /auth/register does NOT set cookies. Let's just return.
-    },
+    onSuccess: () => {},
   });
 
   const logoutMutation = useMutation({
     mutationFn: () => api.post("/auth/logout"),
     onSuccess: () => {
+      localStorage.removeItem("access_token");
       queryClient.setQueryData(["me"], null);
       queryClient.clear();
     },

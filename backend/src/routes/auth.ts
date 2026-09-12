@@ -242,7 +242,7 @@ router.post(
     const clearOptions = {
       httpOnly: true,
       secure: config.NODE_ENV === 'production',
-      sameSite: (config.NODE_ENV === 'production' ? 'strict' : 'lax') as 'strict' | 'lax',
+      sameSite: (config.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
       path: '/',
     };
 

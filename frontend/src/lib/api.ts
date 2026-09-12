@@ -26,15 +26,16 @@ export const api = {
         ? `${cleanBase.slice(0, -3)}${cleanEndpoint}`
         : `${cleanBase}${cleanEndpoint}`;
 
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+
     const config: RequestInit = {
       ...restOptions,
       headers: {
         ...(data ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
       // "include" ensures auth cookies are sent with every request.
-      // The Vite proxy forwards /api/* to the backend, so the browser treats
-      // it as same-origin, but "include" is the safest setting to guarantee cookies flow.
       credentials: "include",
     };
 

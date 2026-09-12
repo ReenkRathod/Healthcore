@@ -54,8 +54,8 @@ export function createApp(): express.Application {
           callback(null, true);
           return;
         }
-        // In development allow all origins; in production enforce FRONTEND_URL
-        if (isDev || origin === config.FRONTEND_URL) {
+        // In development allow all origins; in production allow FRONTEND_URL & .vercel.app origins
+        if (isDev || origin === config.FRONTEND_URL || origin.endsWith('.vercel.app')) {
           callback(null, true);
         } else {
           callback(new Error(`CORS: origin '${origin}' not allowed`));
