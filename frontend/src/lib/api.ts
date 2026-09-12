@@ -15,7 +15,16 @@ interface FetchOptions extends RequestInit {
 export const api = {
   async fetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
     const { data, headers, ...restOptions } = options;
-    const url = endpoint.startsWith("http") ? endpoint : `/api/v1${endpoint}`;
+    const baseUrl = import.meta.env.VITE_API_URL || "/api/v1";
+    const cleanBase = baseUrl.replace(/\/$/, "");
+    const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    
+    // Handle endpoint URLs correctly whether VITE_API_URL is full URL or relative path
+    let url = endpoint.startsWith("http")
+      ? endpoint
+      : cleanBase.endsWith("/v1") && cleanEndpoint.startsWith("/v1/")
+        ? `${cleanBase.slice(0, -3)}${cleanEndpoint}`
+        : `${cleanBase}${cleanEndpoint}`;
 
     const config: RequestInit = {
       ...restOptions,

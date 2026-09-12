@@ -249,7 +249,7 @@ function AuthPage() {
                 </div>
 
                 <a
-                  href="http://localhost:3000/api/v1/auth/google"
+                  href={`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'}/auth/google`}
                   className="h-[44px] border border-outline-variant text-on-surface rounded-lg font-label-md text-label-md flex items-center justify-center gap-sm hover:bg-surface-container-low transition-colors w-full"
                 >
                   <img src="https://www.google.com/favicon.ico" alt="Google" className="w-[18px] h-[18px]" />
@@ -413,7 +413,7 @@ function AuthPage() {
                 </div>
 
                 <a
-                  href="http://localhost:3000/api/v1/auth/google"
+                  href={`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'}/auth/google`}
                   className="h-[44px] border border-outline-variant text-on-surface rounded-lg font-label-md text-label-md flex items-center justify-center gap-sm hover:bg-surface-container-low transition-colors w-full"
                 >
                   <img src="https://www.google.com/favicon.ico" alt="Google" className="w-[18px] h-[18px]" />
