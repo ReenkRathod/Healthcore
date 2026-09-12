@@ -497,3 +497,40 @@ describe('Doctor Discovery & Specialisation Search', () => {
     expect(res.body.data.specialisations[0].name).toBe('Cardiology');
   });
 });
+
+describe('Doctor Self-Service (Profile & Fee)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('allows DOCTOR to update their consultation fee via PATCH /api/v1/doctors/me/fee', async () => {
+    mockPrismaUser.findUnique.mockResolvedValue(doctorUser);
+    mockPrismaDoctorProfile.findUnique.mockResolvedValue(doctorProfile1);
+    mockPrismaDoctorProfile.update.mockResolvedValue({
+      ...doctorProfile1,
+      consultationFee: 85.0,
+    });
+
+    const res = await request(app)
+      .patch('/api/v1/doctors/me/fee')
+      .set('Authorization', authHeader(doctorUser.id, 'DOCTOR'))
+      .send({ consultationFee: 85.0 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.doctor.consultationFee).toBe(85.0);
+  });
+
+  it('rejects invalid consultation fee (negative number)', async () => {
+    mockPrismaUser.findUnique.mockResolvedValue(doctorUser);
+
+    const res = await request(app)
+      .patch('/api/v1/doctors/me/fee')
+      .set('Authorization', authHeader(doctorUser.id, 'DOCTOR'))
+      .send({ consultationFee: -10 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+});
+

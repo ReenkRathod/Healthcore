@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { usePublicDoctors } from "../hooks/useDoctors";
 
@@ -11,15 +11,52 @@ const specialties = [
   "Orthopedics",
 ];
 
+const FEE_PRESETS = [
+  { label: "Any", min: 0, max: Infinity },
+  { label: "Under $50", min: 0, max: 50 },
+  { label: "$50 – $100", min: 50, max: 100 },
+  { label: "$100 – $200", min: 100, max: 200 },
+  { label: "$200+", min: 200, max: Infinity },
+];
+
 export default function FindDoctors() {
   const [activeSpecialty, setActiveSpecialty] = useState("All Specialties");
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortOrder, setSortOrder] = useState("earliest");
+  const [feePreset, setFeePreset] = useState("Any");
+  const [maxFeeSlider, setMaxFeeSlider] = useState(500);
 
   const queryFilters: { search?: string; specialisation?: string } = {};
   if (searchTerm) queryFilters.search = searchTerm;
   if (activeSpecialty !== "All Specialties") queryFilters.specialisation = activeSpecialty;
 
   const { data: doctors = [], isLoading, error } = usePublicDoctors(queryFilters);
+
+  const activeFeePreset = FEE_PRESETS.find((p) => p.label === feePreset) ?? FEE_PRESETS[0];
+
+  const processedDoctors = useMemo(() => {
+    let list = [...doctors];
+
+    // Fee range filter
+    if (feePreset === "Any") {
+      list = list.filter((d) => (d.consultationFee ?? 50) <= maxFeeSlider);
+    } else {
+      list = list.filter(
+        (d) =>
+          (d.consultationFee ?? 50) >= activeFeePreset.min &&
+          (d.consultationFee ?? 50) <= activeFeePreset.max
+      );
+    }
+
+    // Sorting
+    if (sortOrder === "fee-asc") {
+      list.sort((a, b) => (a.consultationFee ?? 50) - (b.consultationFee ?? 50));
+    } else if (sortOrder === "fee-desc") {
+      list.sort((a, b) => (b.consultationFee ?? 50) - (a.consultationFee ?? 50));
+    }
+
+    return list;
+  }, [doctors, sortOrder, feePreset, maxFeeSlider, activeFeePreset]);
 
   return (
     <div className="bg-background text-on-surface antialiased min-h-screen font-body-md text-body-md flex flex-col">
@@ -105,22 +142,94 @@ export default function FindDoctors() {
                   {specialty}
                 </button>
               ))}
-              <button className="px-md py-sm rounded-full bg-surface-bright text-on-surface font-label-md text-label-md border border-outline-variant hover:bg-surface-container transition-colors flex items-center gap-xs">
-                <span className="material-symbols-outlined text-[18px]">tune</span>
-                More Filters
-              </button>
             </div>
+          </div>
+
+          {/* Consultation Fee Filter */}
+          <div className="flex flex-col gap-md border-t border-outline-variant pt-lg mt-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-xs">
+                <span className="material-symbols-outlined text-[18px] text-primary">payments</span>
+                <h3 className="font-label-md text-label-md text-on-surface-variant">Consultation Fee</h3>
+              </div>
+              {feePreset === "Any" && (
+                <span className="font-label-sm text-label-sm text-on-primary-container bg-primary-container px-2 py-0.5 rounded-md">
+                  Up to {maxFeeSlider >= 500 ? "$500+" : `$${maxFeeSlider}`}
+                </span>
+              )}
+            </div>
+
+            {/* Quick fee presets */}
+            <div className="flex flex-wrap gap-sm">
+              {FEE_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  id={`fee-preset-${preset.label.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`}
+                  onClick={() => setFeePreset(preset.label)}
+                  className={
+                    feePreset === preset.label
+                      ? "px-md py-sm rounded-full bg-primary text-on-primary font-label-md text-label-md border border-primary transition-all shadow-sm"
+                      : "px-md py-sm rounded-full bg-surface-bright text-on-surface font-label-md text-label-md border border-outline-variant hover:bg-primary-fixed hover:border-primary transition-all"
+                  }
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Range slider — shown when "Any" is selected */}
+            {feePreset === "Any" && (
+              <div className="flex flex-col gap-xs mt-xs">
+                <div className="flex items-center gap-md">
+                  <span className="font-body-sm text-body-sm text-on-surface-variant w-8">$0</span>
+                  <div className="relative flex-1 flex items-center h-6">
+                    <div className="absolute inset-y-0 left-0 right-0 flex items-center">
+                      <div className="w-full h-1.5 bg-outline-variant rounded-full" />
+                      <div
+                        className="absolute h-1.5 bg-primary rounded-full transition-all"
+                        style={{ width: `${Math.min((maxFeeSlider / 500) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <input
+                      id="fee-range-slider"
+                      type="range"
+                      min={0}
+                      max={500}
+                      step={10}
+                      value={maxFeeSlider}
+                      onChange={(e) => setMaxFeeSlider(Number(e.target.value))}
+                      className="relative w-full cursor-pointer"
+                      style={{ WebkitAppearance: "auto", appearance: "auto" }}
+                    />
+                  </div>
+                  <span className="font-body-sm text-body-sm text-on-surface-variant w-14 text-right">
+                    {maxFeeSlider >= 500 ? "$500+" : `$${maxFeeSlider}`}
+                  </span>
+                </div>
+                <p className="font-body-sm text-body-sm text-on-surface-variant text-center">
+                  Drag to set your maximum consultation fee
+                </p>
+              </div>
+            )}
           </div>
         </section>
         {/* Results Header */}
         <div className="flex justify-between items-center mt-md">
-          <h2 className="font-headline-md text-headline-md text-on-surface">Available Doctors ({doctors.length})</h2>
+          <div className="flex items-baseline gap-sm">
+            <h2 className="font-headline-md text-headline-md text-on-surface">Available Doctors</h2>
+            <span className="font-body-sm text-body-sm text-on-surface-variant">({processedDoctors.length} shown)</span>
+          </div>
           <div className="flex items-center gap-sm">
             <span className="font-body-sm text-body-sm text-on-surface-variant">Sort by:</span>
-            <select className="border border-outline-variant rounded-md bg-surface-bright px-sm py-[6px] font-body-sm text-body-sm text-on-surface focus:ring-primary focus:border-primary outline-none">
-              <option>Earliest Available</option>
-              <option>Highest Rated</option>
-              <option>Distance</option>
+            <select
+              id="doctor-sort-select"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="border border-outline-variant rounded-md bg-surface-bright px-sm py-[6px] font-body-sm text-body-sm text-on-surface focus:ring-primary focus:border-primary outline-none cursor-pointer"
+            >
+              <option value="earliest">Earliest Available</option>
+              <option value="fee-asc">Fee: Low to High</option>
+              <option value="fee-desc">Fee: High to Low</option>
             </select>
           </div>
         </div>
@@ -128,10 +237,14 @@ export default function FindDoctors() {
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter">
           {isLoading && <div className="col-span-full text-center py-xl text-on-surface-variant font-body-lg">Loading doctors...</div>}
           {error && <div className="col-span-full text-center py-xl text-error font-body-lg">Error loading doctors.</div>}
-          {!isLoading && !error && doctors.length === 0 && (
-            <div className="col-span-full text-center py-xl text-on-surface-variant font-body-lg">No doctors found matching your criteria.</div>
+          {!isLoading && !error && processedDoctors.length === 0 && (
+            <div className="col-span-full text-center py-xl text-on-surface-variant font-body-lg">
+              {doctors.length === 0
+                ? "No doctors found matching your criteria."
+                : "No doctors match your fee filter. Try adjusting the range."}
+            </div>
           )}
-          {!isLoading && !error && doctors.map((doctor) => (
+          {!isLoading && !error && processedDoctors.map((doctor) => (
             <div key={doctor.id} className="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg flex flex-col gap-md transition-shadow hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
               <div className="flex items-start gap-md">
                 {doctor.avatarUrl ? (

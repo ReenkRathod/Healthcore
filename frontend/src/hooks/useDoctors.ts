@@ -165,3 +165,29 @@ export const useApplyLeave = () => {
     },
   });
 };
+
+// ─── Doctor self-service: own profile & fee ──────────────────────────────────
+
+export const useMyDoctorProfile = () => {
+  return useQuery({
+    queryKey: ["myDoctorProfile"],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: { doctor: DoctorProfile } }>(`/doctors/me/profile`);
+      return res.data.doctor;
+    },
+  });
+};
+
+export const useUpdateMyFee = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (consultationFee: number) => {
+      return api.patch<{ success: boolean; data: { doctor: DoctorProfile } }>(`/doctors/me/fee`, { consultationFee });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["myDoctorProfile"] });
+      queryClient.invalidateQueries({ queryKey: ["publicDoctors"] });
+    },
+  });
+};

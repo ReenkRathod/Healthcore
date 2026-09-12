@@ -1,0 +1,10 @@
+node_modules
+dist
+.output
+.tanstack
+.wrangler
+coverage
+.env
+*.log
+.git
+.gitignore

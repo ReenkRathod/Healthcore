@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAppointments } from "../hooks/useAppointments";
 import { useAuth } from "../hooks/useAuth";
+import { useMyDoctorProfile, useUpdateMyFee } from "../hooks/useDoctors";
 import { NotificationBell } from "../components/NotificationBell";
 import { SectionSkeleton } from "../components/ui/LoadingSpinner";
 import {
@@ -49,6 +50,42 @@ export default function ProviderDashboard() {
   );
 
   const [showLeaveModal, setShowLeaveModal] = useState(false);
+
+  // — Fee management state —
+  const { data: myProfile, isLoading: profileLoading } = useMyDoctorProfile();
+  const updateFeeMutation = useUpdateMyFee();
+  const [feeEditMode, setFeeEditMode] = useState(false);
+  const [feeInput, setFeeInput] = useState("");
+  const [feeToast, setFeeToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+
+  const currentFee = myProfile?.consultationFee ?? 50;
+
+  const handleFeeEdit = () => {
+    setFeeInput(String(currentFee));
+    setFeeEditMode(true);
+    setFeeToast(null);
+  };
+
+  const handleFeeCancel = () => {
+    setFeeEditMode(false);
+    setFeeInput("");
+  };
+
+  const handleFeeSubmit = async () => {
+    const parsed = parseFloat(feeInput);
+    if (isNaN(parsed) || parsed < 0) {
+      setFeeToast({ type: "error", msg: "Please enter a valid fee (0 or more)." });
+      return;
+    }
+    try {
+      await updateFeeMutation.mutateAsync(parsed);
+      setFeeEditMode(false);
+      setFeeToast({ type: "success", msg: `Fee updated to $${parsed.toFixed(2)}` });
+      setTimeout(() => setFeeToast(null), 3500);
+    } catch (err: any) {
+      setFeeToast({ type: "error", msg: err?.message || "Failed to update fee. Please try again." });
+    }
+  };
 
   const firstAppointmentId = appointments[0]?.id ?? upcomingAppointments[0]?.id;
   const userInitials = user ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase() : "DR";
@@ -176,7 +213,7 @@ export default function ProviderDashboard() {
                 <span className="material-symbols-outlined text-primary">event_available</span>
               </div>
               <div className="mt-4">
-                <span className="text-display-lg font-display-lg text-on-surface">{isLoading ? "—" : appointments.length}</span>
+                <span className="text-display-lg font-display-lg text-on-surface">{isLoading ? "\u2014" : appointments.length}</span>
                 <span className="text-body-sm font-body-sm text-on-surface-variant ml-2">Scheduled</span>
               </div>
             </div>
@@ -186,7 +223,7 @@ export default function ProviderDashboard() {
                 <span className="material-symbols-outlined text-error">edit_document</span>
               </div>
               <div className="mt-4">
-                <span className="text-display-lg font-display-lg text-on-surface">{isLoading ? "—" : pendingActionCount}</span>
+                <span className="text-display-lg font-display-lg text-on-surface">{isLoading ? "\u2014" : pendingActionCount}</span>
                 <span className="text-body-sm font-body-sm text-on-surface-variant ml-2">Need attention</span>
               </div>
             </div>
@@ -210,7 +247,7 @@ export default function ProviderDashboard() {
                     <span className="text-body-md font-body-md font-medium opacity-90 bg-on-primary-container/10 px-2 py-1 rounded inline-flex items-center gap-1">
                       <span className="material-symbols-outlined text-[16px]">alarm</span>
                       {new Date(nextAppointment.slotStart).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                      {" · "}
+                      {" \u00b7 "}
                       {formatAppointmentTime(nextAppointment.slotStart)}
                     </span>
                   </>
@@ -218,6 +255,147 @@ export default function ProviderDashboard() {
                   <span className="text-body-md font-body-md opacity-90">No upcoming appointments</span>
                 )}
               </div>
+            </div>
+          </section>
+
+          {/* Consultation Fee Card */}
+          <section
+            id="consultation-fee-section"
+            className="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
+          >
+            {/* Card Header strip */}
+            <div className="flex items-center justify-between px-lg py-md border-b border-outline-variant bg-surface-container-low">
+              <div className="flex items-center gap-sm">
+                <span className="material-symbols-outlined text-[20px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>payments</span>
+                <h3 className="text-label-md font-label-md text-on-surface uppercase tracking-wider">Consultation Fee</h3>
+              </div>
+              <span className="text-body-sm font-body-sm text-on-surface-variant hidden sm:block">Shown to patients when searching for doctors</span>
+            </div>
+
+            {/* Card Body */}
+            <div className="px-lg py-lg flex flex-col gap-md">
+
+              {/* View mode */}
+              {!feeEditMode && (
+                <div className="flex items-center justify-between gap-md flex-wrap">
+                  <div className="flex items-end gap-xs">
+                    {profileLoading ? (
+                      <div className="h-14 w-40 bg-surface-container-low rounded-xl animate-pulse" />
+                    ) : (
+                      <>
+                        <span className="text-headline-md font-headline-md text-on-surface-variant mb-1">USD</span>
+                        <span className="text-display-lg font-display-lg text-on-surface leading-none">
+                          {currentFee.toFixed(2)}
+                        </span>
+                        <span className="text-body-sm font-body-sm text-on-surface-variant mb-1 ml-xs">/ visit</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-xs">
+                    <button
+                      id="fee-edit-btn"
+                      onClick={handleFeeEdit}
+                      className="flex items-center gap-xs px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:bg-on-primary-fixed-variant transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                      Update Fee
+                    </button>
+                    {myProfile?.updatedAt && (
+                      <span className="text-body-sm font-body-sm text-on-surface-variant">
+                        Last updated {new Date(myProfile.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Edit mode */}
+              {feeEditMode && (
+                <div className="flex flex-col gap-md">
+                  <div className="flex flex-wrap items-end gap-md">
+                    {/* Input */}
+                    <div className="flex flex-col gap-xs">
+                      <label htmlFor="fee-input" className="text-label-md font-label-md text-on-surface-variant">
+                        New fee (USD)
+                      </label>
+                      <div className="relative flex items-center w-48">
+                        <span className="absolute left-md text-on-surface-variant font-semibold text-body-md select-none pointer-events-none">$</span>
+                        <input
+                          id="fee-input"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder={currentFee.toFixed(2)}
+                          value={feeInput}
+                          onChange={(e) => setFeeInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleFeeSubmit();
+                            if (e.key === "Escape") handleFeeCancel();
+                          }}
+                          className="w-full h-[44px] pl-[36px] pr-sm rounded-lg border-2 border-primary bg-surface-bright focus:ring-2 focus:ring-primary/20 outline-none text-body-md font-body-md text-on-surface transition-all"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    {/* Buttons */}
+                    <div className="flex items-center gap-sm pb-px">
+                      <button
+                        id="fee-save-btn"
+                        onClick={handleFeeSubmit}
+                        disabled={updateFeeMutation.isPending}
+                        className="h-[44px] px-lg rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:bg-on-primary-fixed-variant disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-xs"
+                      >
+                        {updateFeeMutation.isPending ? (
+                          <>
+                            <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                            Saving…
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[16px]">check</span>
+                            Save
+                          </>
+                        )}
+                      </button>
+                      <button
+                        id="fee-cancel-btn"
+                        onClick={handleFeeCancel}
+                        disabled={updateFeeMutation.isPending}
+                        className="h-[44px] px-md rounded-lg border border-outline-variant bg-surface-bright text-on-surface font-label-md text-label-md hover:bg-surface-container-low transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-body-sm font-body-sm text-on-surface-variant">
+                    Set to <span className="font-semibold text-on-surface">0</span> to offer free consultations.
+                    Press{" "}<kbd className="px-1.5 py-0.5 rounded border border-outline-variant bg-surface-container text-code-sm font-code-sm">Enter</kbd>{" "}
+                    to save or{" "}<kbd className="px-1.5 py-0.5 rounded border border-outline-variant bg-surface-container text-code-sm font-code-sm">Esc</kbd>{" "}
+                    to cancel.
+                  </p>
+                </div>
+              )}
+
+              {/* Toast notification */}
+              {feeToast && (
+                <div
+                  className={`flex items-center gap-sm px-md py-sm rounded-lg text-body-sm font-body-sm border ${
+                    feeToast.type === "success"
+                      ? "bg-success-container text-on-success-container border-success-container"
+                      : "bg-error-container text-on-error-container border-error-container"
+                  }`}
+                >
+                  <span
+                    className="material-symbols-outlined text-[16px] shrink-0"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >
+                    {feeToast.type === "success" ? "check_circle" : "error"}
+                  </span>
+                  {feeToast.msg}
+                </div>
+              )}
             </div>
           </section>
 

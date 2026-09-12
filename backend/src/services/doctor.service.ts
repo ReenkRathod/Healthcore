@@ -163,22 +163,22 @@ export async function updateDoctor(
   }
 
   try {
+    const userUpdate: Prisma.UserUpdateWithoutDoctorProfileInput = {};
+    if (data.firstName !== undefined) userUpdate.firstName = data.firstName;
+    if (data.lastName !== undefined) userUpdate.lastName = data.lastName;
+    if (data.phone !== undefined) userUpdate.phone = data.phone;
+
     const updated = await prisma.doctorProfile.update({
       where: { id: doctorProfileId },
       data: {
         title: data.title !== undefined ? data.title : undefined,
         licenseNumber: data.licenseNumber !== undefined ? data.licenseNumber : undefined,
         slotDurationMn: data.slotDurationMn !== undefined ? data.slotDurationMn : undefined,
+        consultationFee: data.consultationFee !== undefined ? data.consultationFee : undefined,
         bio: data.bio !== undefined ? data.bio : undefined,
         avatarUrl: data.avatarUrl !== undefined ? data.avatarUrl : undefined,
         isAccepting: data.isAccepting !== undefined ? data.isAccepting : undefined,
-        user: {
-          update: {
-            firstName: data.firstName !== undefined ? data.firstName : undefined,
-            lastName: data.lastName !== undefined ? data.lastName : undefined,
-            phone: data.phone !== undefined ? data.phone : undefined,
-          },
-        },
+        ...(Object.keys(userUpdate).length > 0 ? { user: { update: userUpdate } } : {}),
       },
       include: {
         user: true,

@@ -1,0 +1,52 @@
+
+services:
+  # ── Redis Service (BullMQ Background Queue) ──────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: healthcare_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - healthcare_network
+
+  # ── Backend Node.js / Prisma REST API (Connected to Supabase) ──────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: healthcare_backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.docker
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - healthcare_network
+
+  # ── Frontend Vite / Nginx SPA Service ───────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: healthcare_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - healthcare_network
+
+networks:
+  healthcare_network:
+    driver: bridge

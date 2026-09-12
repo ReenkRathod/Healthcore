@@ -17,6 +17,58 @@ import { AppError } from '../utils/AppError';
 
 const router = Router();
 
+// ─── GET /me/profile — Get own profile (DOCTOR only) ────────────────────────
+router.get(
+  '/me/profile',
+  authenticate,
+  requireRole('DOCTOR'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const doctorProfile = await prisma.doctorProfile.findUnique({
+        where: { userId: req.user!.id },
+      });
+
+      if (!doctorProfile) throw AppError.notFound('Doctor profile not found');
+
+      const doctor = await doctorService.getDoctorById(doctorProfile.id);
+      res.status(200).json({ success: true, data: { doctor } });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── PATCH /me/fee — Update own consultation fee (DOCTOR only) ──────────────
+router.patch(
+  '/me/fee',
+  authenticate,
+  requireRole('DOCTOR'),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { consultationFee } = req.body as { consultationFee?: number };
+
+      if (consultationFee === undefined || typeof consultationFee !== 'number' || consultationFee < 0) {
+        res.status(400).json({
+          success: false,
+          error: { message: 'consultationFee must be a non-negative number', code: 'BAD_REQUEST', statusCode: 400 },
+        });
+        return;
+      }
+
+      const doctorProfile = await prisma.doctorProfile.findUnique({
+        where: { userId: req.user!.id },
+      });
+
+      if (!doctorProfile) throw AppError.notFound('Doctor profile not found');
+
+      const doctor = await doctorService.updateDoctor(doctorProfile.id, { consultationFee });
+      res.status(200).json({ success: true, data: { doctor } });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ─── POST /me/leaves — Apply for leave (DOCTOR only) ────────────────────────
 router.post(
   '/me/leaves',
